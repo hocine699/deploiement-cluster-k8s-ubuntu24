@@ -85,6 +85,19 @@
         state: absent
       loop: "{{ kube_apt_files }}"
 
+    - name: "Suppression de l'environnement desktop"
+      apt:
+        name:
+          - ubuntu-desktop
+          - ubuntu-desktop-minimal
+          - gnome-shell
+          - gnome-session
+          - gdm3
+          - snapd
+        state: absent
+        purge: yes
+      ignore_errors: true
+
     - name: "Mise à jour complète des paquets Ubuntu"
       apt:
         update_cache: yes
@@ -97,6 +110,16 @@
         name: containerd
         state: restarted
         enabled: yes
+
+    - name: "Renommage du nœud selon l'inventaire Ansible"
+      hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: "Mise à jour de /etc/hosts"
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ inventory_hostname }}"
 
     - name: "Reboot des nœuds"
       reboot:
