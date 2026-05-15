@@ -10,51 +10,65 @@
       - /var/lib/etcd
       - /etc/kubernetes
       - /etc/cni/net.d
+      - /opt/cni/bin
       - /var/lib/containerd
-      - /var/lib/docker
       - /run/flannel
       - /run/calico
     kube_user_dirs:
       - /root/.kube
       - /home/{{ ansible_user_id }}/.kube
-    kube_services:
-      - kubelet
-      - containerd
-      - docker
     kube_apt_files:
       - /etc/apt/sources.list.d/kubernetes.list
       - /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
   tasks:
 
-    - name: "Collecte des services système existants"
-      service_facts:
-
-    - name: "Arrêt des services Kubernetes et runtime existants"
-      systemd:
-        name: "{{ item }}"
-        state: stopped
-        enabled: no
-      loop: "{{ kube_services }}"
-      when: "item in ansible_facts.services.keys()"
-
     - name: "Reset Kubernetes via kubeadm"
       command: kubeadm reset -f
       ignore_errors: true
 
-    - name: "Supprimer tous les fichiers et dossiers liés à Kubernetes et conteneurs"
+    - name: "Arrêt des services Kubernetes"
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - kubelet
+        - containerd
+      ignore_errors: true
+
+    - name: "Déverrouillage des paquets Kubernetes"
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: install
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+      ignore_errors: true
+
+    - name: "Désinstallation des paquets Kubernetes"
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: absent
+        purge: yes
+
+    - name: "Suppression des fichiers et dossiers Kubernetes"
       file:
         path: "{{ item }}"
         state: absent
       loop: "{{ kube_runtime_dirs + kube_user_dirs }}"
 
-    - name: "Supprimer toutes les interfaces réseau CNI"
+    - name: "Suppression des interfaces réseau CNI"
       shell: |
-        for iface in flannel.1 cni0 docker0 cali+; do
+        for iface in flannel.1 cni0 docker0; do
           ip link delete $iface 2>/dev/null || true
         done
 
-    - name: "Vider toutes les règles iptables et ip6tables"
+    - name: "Vidage des règles iptables"
       shell: |
         iptables -F
         iptables -t nat -F
@@ -65,103 +79,27 @@
         ip6tables -t mangle -F
         ip6tables -X
 
-    - name: "Supprimer les dépôts Kubernetes APT et clés"
+    - name: "Suppression du dépôt Kubernetes APT"
       file:
         path: "{{ item }}"
         state: absent
       loop: "{{ kube_apt_files }}"
 
-    - name: "Supprimer les éventuelles lignes Kubernetes dans /etc/apt/sources.list"
-      lineinfile:
-        path: /etc/apt/sources.list
-        regexp: '.*apt.kubernetes.io.*'
-        state: absent
-
-    - name: "Mettre à jour le cache APT"
+    - name: "Mise à jour du cache APT"
       apt:
         update_cache: yes
 
-    - name: "Redémarrage des services runtime existants après nettoyage"
+    - name: "Redémarrage de containerd"
       systemd:
-        name: "{{ item }}"
+        name: containerd
         state: restarted
         enabled: yes
-      loop: "{{ kube_services }}"
-      when: "item in ansible_facts.services.keys()"
 
     - name: "Vérification post-nettoyage"
-      shell: |
-        kubectl version --client || echo "kubectl non accessible (normal après nettoyage)"
-        docker ps || echo "Docker accessible"
+      shell: systemctl is-active kubelet || echo "kubelet arrêté (normal)"
       register: cleanup_status
       ignore_errors: true
 
-    - name: "Affichage du statut de nettoyage"
+    - name: "Statut post-nettoyage"
       debug:
-        var: cleanup_status.stdout_lines
-
-
-#   hosts: all
-#   become: true
-#   gather_facts: false
-  
-#   tasks:
-#     - name: "Reset du cluster Kubernetes"
-#       shell: kubeadm reset -f
-#       ignore_errors: true
-
-#     - name: "Arrêt des services Kubernetes"
-#       systemd:
-#         name: "{{ item }}"
-#         state: stopped
-#       loop:
-#         - kubelet
-#         - containerd
-#       ignore_errors: true
-
-#     - name: "Suppression des fichiers de configuration Kubernetes"
-#       file:
-#         path: "{{ item }}"
-#         state: absent
-#       loop:
-#         - /etc/kubernetes/
-#         - /var/lib/kubelet/
-#         - /var/lib/etcd/
-#         - /etc/cni/net.d/
-#         - /home/ubuntu/.kube/
-#         - /root/.kube/
-
-#     - name: "Suppression des interfaces réseau"
-#       shell: |
-#         ip link delete flannel.1 2>/dev/null || true
-#         ip link delete cni0 2>/dev/null || true
-#         ip link delete docker0 2>/dev/null || true
-#       ignore_errors: true
-
-#     - name: "Nettoyage des règles iptables"
-#       shell: |
-#         iptables -F
-#         iptables -t nat -F
-#         iptables -t mangle -F
-#         iptables -X
-#       ignore_errors: true
-
-#     - name: "Redémarrage des services réseau"
-#       systemd:
-#         name: "{{ item }}"
-#         state: restarted
-#       loop:
-#         - containerd
-#         - kubelet
-#       ignore_errors: true
-
-#     - name: "Vérification du nettoyage"
-#       shell: |
-#         kubectl version --client || echo "kubectl non accessible (normal après nettoyage)"
-#         docker ps || echo "Docker non accessible"
-#       register: cleanup_status
-#       ignore_errors: true
-
-#     - name: "Affichage du statut de nettoyage"
-#       debug:
-#         var: cleanup_status.stdout_lines
+        var: cleanup_status.stdout
