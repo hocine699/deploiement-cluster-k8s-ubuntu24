@@ -22,7 +22,8 @@ jobs:
 
     env:
       ANSIBLE_FORCE_COLOR: "True"
-      ANSIBLE_STDOUT_CALLBACK: "yaml"
+      ANSIBLE_STDOUT_CALLBACK: "default"
+      ANSIBLE_CALLBACK_RESULT_FORMAT: "yaml"
       ANSIBLE_HOST_KEY_CHECKING: "False"
       K8S_MASTER_IP: ${{ secrets.K8S_MASTER_IP }}
       K8S_WORKER1_IP: ${{ secrets.K8S_WORKER1_IP }}
