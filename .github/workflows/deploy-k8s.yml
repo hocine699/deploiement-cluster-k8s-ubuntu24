@@ -84,11 +84,11 @@ jobs:
         run: ansible all -i inventory/inventory.yml -m ping
 
       - name: Deploy cluster (fresh install)
-        if: ${{ github.event.inputs.action == 'deploy' || github.event_name == 'push' }}
+        if: ${{ github.event.inputs.action == 'deploy' }}
         run: ansible-playbook -i inventory/inventory.yml playbooks/site.yml -v
 
       - name: Upgrade cluster
-        if: ${{ github.event.inputs.action == 'upgrade' }}
+        if: ${{ github.event.inputs.action == 'upgrade' || github.event_name == 'push' }}
         run: ansible-playbook -i inventory/inventory.yml playbooks/upgrade-cluster.yml -v
 
       - name: Verify cluster

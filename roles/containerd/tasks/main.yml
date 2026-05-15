@@ -2,10 +2,11 @@
 - name: "Installation et configuration de containerd"
   tags: containerd
   block:
-    - name: "Installation de containerd (version ciblée)"
+    - name: "Installation de containerd"
       apt:
-        name: "containerd={{ containerd_version }}"
+        name: containerd
         state: present
+        update_cache: yes
 
     - name: "Création du répertoire de configuration containerd"
       file:

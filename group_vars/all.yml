@@ -17,8 +17,6 @@ service_network_cidr: "10.96.0.0/12"
 # CNI Plugin (Flannel)
 flannel_version: "v0.28.4"
 
-# Docker/Containerd
-containerd_version: "1.7.28-0ubuntu1~24.04.1"
 
 # Configuration du cluster
 cluster_name: "k8s-cluster"
