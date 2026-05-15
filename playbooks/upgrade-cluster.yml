@@ -124,7 +124,8 @@
         kubectl drain {{ ansible_hostname | lower }}
         --ignore-daemonsets
         --delete-emptydir-data
-        --timeout=120s
+        --grace-period=60
+        --timeout=300s
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
       delegate_to: "{{ groups['masters'][0] }}"
