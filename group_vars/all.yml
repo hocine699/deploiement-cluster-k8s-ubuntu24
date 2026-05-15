@@ -1,6 +1,6 @@
 # Variables pour le cluster Kubernetes
-kubernetes_version: "1.34.1"
-kubernetes_version_rhel_package: "1.34.1.*"
+kubernetes_version: "1.35.0"
+kubernetes_version_rhel_package: "1.35.0.*"
 # Suffixe utilisé pour les paquets Debian (kubelet/kubeadm/kubectl) — ex: '-00'
 kubernetes_package_suffix: "-00"
 
@@ -23,7 +23,7 @@ pod_network_cidr: "10.244.0.0/16"
 service_network_cidr: "10.96.0.0/12"
 
 # CNI Plugin (Flannel)
-flannel_version: "v0.22.3"
+flannel_version: "v0.28.4"
 
 # Docker/Containerd
 containerd_version: "1.7.28-0ubuntu1~24.04.1"
