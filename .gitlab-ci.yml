@@ -249,33 +249,6 @@ Verification_cluster:
 # 📊 Stage 6 : Déploiement des applications (Dashboard + Monitoring)
 # ============================================================
 
-Deploy_dashboard:
-  stage: Déploiement-app
-  <<: *ansible_job
-  script:
-    - echo "=== Déploiement du Kubernetes Dashboard ==="
-    - mkdir -p ~/.kube
-    - scp -o StrictHostKeyChecking=no hocine@$K8S_MASTER_IP:~/.kube/config ~/.kube/config
-    - kubectl apply -f configs/k8s-dashboard.yaml
-    - sleep 60
-    - kubectl get pods -n kubernetes-dashboard
-    - kubectl get services -n kubernetes-dashboard
-    - |
-      echo "=== Récupération du token d’accès Dashboard ==="
-      TOKEN=$(kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get sa admin-user -o jsonpath="{.secrets[0].name}") -o jsonpath="{.data.token}" | base64 -d)
-      echo "Dashboard URL: https://$K8S_MASTER_IP:30443"
-      echo "Token: $TOKEN"
-      echo "Dashboard accessible à: https://$K8S_MASTER_IP:30443" > dashboard-access.txt
-      echo "Token d’accès: $TOKEN" >> dashboard-access.txt
-  dependencies:
-    - Verification_cluster
-  artifacts:
-    paths:
-      - dashboard-access.txt
-    expire_in: 1 week
-  only:
-    - infrastructure
-
 Deploy_monitoring:
   stage: Déploiement-app
   <<: *ansible_job
@@ -288,7 +261,7 @@ Deploy_monitoring:
     - kubectl get pods -n kube-system | grep -E "prometheus|grafana|exporter" || true
     - ansible-playbook playbooks/prometheus-alerts.yml
   dependencies:
-    - Deploy_dashboard
+    - Verification_cluster
   artifacts:
     paths:
       - monitoring-config/

@@ -1,0 +1,99 @@
+name: Kubernetes Cluster
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action à exécuter'
+        required: true
+        default: 'upgrade'
+        type: choice
+        options:
+          - upgrade
+          - deploy
+
+jobs:
+  run:
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 90
+
+    env:
+      ANSIBLE_FORCE_COLOR: "True"
+      ANSIBLE_STDOUT_CALLBACK: "yaml"
+      ANSIBLE_HOST_KEY_CHECKING: "False"
+      K8S_MASTER_IP: ${{ secrets.K8S_MASTER_IP }}
+      K8S_WORKER1_IP: ${{ secrets.K8S_WORKER1_IP }}
+      K8S_WORKER2_IP: ${{ secrets.K8S_WORKER2_IP }}
+      ANSIBLE_USER: ${{ secrets.ANSIBLE_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible python3-paramiko
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$K8S_MASTER_IP" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$K8S_WORKER1_IP" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$K8S_WORKER2_IP" >> ~/.ssh/known_hosts
+
+      - name: Create inventory
+        run: |
+          cat > inventory/inventory.yml <<EOF
+          all:
+            children:
+              masters:
+                hosts:
+                  k8s-master-01:
+                    ansible_host: $K8S_MASTER_IP
+                    ansible_user: $ANSIBLE_USER
+                    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+                    node_role: master
+              workers:
+                hosts:
+                  k8s-worker-01:
+                    ansible_host: $K8S_WORKER1_IP
+                    ansible_user: $ANSIBLE_USER
+                    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+                    node_role: worker
+                  k8s-worker-02:
+                    ansible_host: $K8S_WORKER2_IP
+                    ansible_user: $ANSIBLE_USER
+                    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+                    node_role: worker
+            vars:
+              ansible_python_interpreter: /usr/bin/python3
+              ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o ControlMaster=no'
+              ansible_become: true
+              ansible_become_method: sudo
+          EOF
+
+      - name: Test connectivity
+        run: ansible all -i inventory/inventory.yml -m ping
+
+      - name: Deploy cluster (fresh install)
+        if: ${{ github.event.inputs.action == 'deploy' || github.event_name == 'push' }}
+        run: ansible-playbook -i inventory/inventory.yml playbooks/site.yml -v
+
+      - name: Upgrade cluster
+        if: ${{ github.event.inputs.action == 'upgrade' }}
+        run: ansible-playbook -i inventory/inventory.yml playbooks/upgrade-cluster.yml -v
+
+      - name: Verify cluster
+        run: |
+          mkdir -p ~/.kube
+          scp -o StrictHostKeyChecking=no \
+            "$ANSIBLE_USER@$K8S_MASTER_IP:~/.kube/config" \
+            ~/.kube/config
+          kubectl get nodes -o wide

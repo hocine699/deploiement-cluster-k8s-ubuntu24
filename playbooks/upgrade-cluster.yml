@@ -1,0 +1,223 @@
+---
+# Upgrade d'un cluster Kubernetes en place (1 minor version à la fois)
+# Usage : ansible-playbook -i inventory/inventory.yml playbooks/upgrade-cluster.yml
+#
+# Prérequis : kubernetes_version et k8s_pkgs_version dans group_vars/all.yml
+# sont déjà mis à jour vers la version cible avant de lancer ce playbook.
+
+# ============================================================
+# Étape 1 : Upgrade du nœud master
+# ============================================================
+
+- name: "Upgrade du nœud master"
+  hosts: masters
+  become: true
+  serial: 1
+
+  tasks:
+    - name: "Mise à jour du repo vers {{ k8s_pkgs_version }}"
+      shell: |
+        for i in {1..3}; do
+          if curl -fsSL --connect-timeout 30 --max-time 60 \
+            "https://pkgs.k8s.io/core:/stable:/{{ k8s_pkgs_version }}/deb/Release.key" \
+            | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg; then
+            chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+            break
+          fi
+          sleep 10
+        done
+        echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
+          https://pkgs.k8s.io/core:/stable:/{{ k8s_pkgs_version }}/deb/ /" \
+          > /etc/apt/sources.list.d/kubernetes.list
+
+    - name: "Mise à jour du cache APT"
+      apt:
+        update_cache: true
+
+    - name: "Déverrouillage des paquets Kubernetes"
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: install
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+    - name: "Installation de kubeadm {{ kubernetes_version_full }}"
+      apt:
+        name: "kubeadm={{ kubernetes_version_full }}"
+        state: present
+
+    - name: "Vérification du plan d'upgrade"
+      shell: kubeadm upgrade plan v{{ kubernetes_version }}
+      register: upgrade_plan
+
+    - name: "Plan d'upgrade"
+      debug:
+        var: upgrade_plan.stdout_lines
+
+    - name: "Application de l'upgrade du control-plane"
+      shell: kubeadm upgrade apply v{{ kubernetes_version }} --yes
+      register: upgrade_apply
+
+    - name: "Résultat de l'upgrade"
+      debug:
+        var: upgrade_apply.stdout_lines
+
+    - name: "Drain du master (ignore daemonsets)"
+      shell: >
+        kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=120s
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: "Installation de kubelet et kubectl {{ kubernetes_version_full }}"
+      apt:
+        name:
+          - "kubelet={{ kubernetes_version_full }}"
+          - "kubectl={{ kubernetes_version_full }}"
+        state: present
+
+    - name: "Redémarrage de kubelet"
+      systemd:
+        name: kubelet
+        state: restarted
+        daemon_reload: true
+
+    - name: "Uncordon du master"
+      shell: kubectl uncordon {{ inventory_hostname }}
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: "Verrouillage des versions"
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+    - name: "Attente que le master soit Ready"
+      shell: kubectl get node {{ inventory_hostname }} --no-headers | awk '{print $2}'
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: master_status
+      until: master_status.stdout == "Ready"
+      retries: 20
+      delay: 15
+
+# ============================================================
+# Étape 2 : Upgrade des workers (un par un)
+# ============================================================
+
+- name: "Upgrade des nœuds workers"
+  hosts: workers
+  become: true
+  serial: 1
+
+  tasks:
+    - name: "Drain de {{ inventory_hostname }} depuis le master"
+      shell: >
+        kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=120s
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      delegate_to: "{{ groups['masters'][0] }}"
+
+    - name: "Mise à jour du repo vers {{ k8s_pkgs_version }}"
+      shell: |
+        for i in {1..3}; do
+          if curl -fsSL --connect-timeout 30 --max-time 60 \
+            "https://pkgs.k8s.io/core:/stable:/{{ k8s_pkgs_version }}/deb/Release.key" \
+            | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg; then
+            chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+            break
+          fi
+          sleep 10
+        done
+        echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
+          https://pkgs.k8s.io/core:/stable:/{{ k8s_pkgs_version }}/deb/ /" \
+          > /etc/apt/sources.list.d/kubernetes.list
+
+    - name: "Mise à jour du cache APT"
+      apt:
+        update_cache: true
+
+    - name: "Déverrouillage des paquets Kubernetes"
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: install
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+    - name: "Installation de kubeadm {{ kubernetes_version_full }}"
+      apt:
+        name: "kubeadm={{ kubernetes_version_full }}"
+        state: present
+
+    - name: "Mise à jour de la configuration kubelet du worker"
+      shell: kubeadm upgrade node
+
+    - name: "Installation de kubelet et kubectl {{ kubernetes_version_full }}"
+      apt:
+        name:
+          - "kubelet={{ kubernetes_version_full }}"
+          - "kubectl={{ kubernetes_version_full }}"
+        state: present
+
+    - name: "Redémarrage de kubelet"
+      systemd:
+        name: kubelet
+        state: restarted
+        daemon_reload: true
+
+    - name: "Verrouillage des versions"
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+
+    - name: "Uncordon de {{ inventory_hostname }}"
+      shell: kubectl uncordon {{ inventory_hostname }}
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      delegate_to: "{{ groups['masters'][0] }}"
+
+    - name: "Attente que {{ inventory_hostname }} soit Ready"
+      shell: kubectl get node {{ inventory_hostname }} --no-headers | awk '{print $2}'
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: worker_status
+      until: worker_status.stdout == "Ready"
+      retries: 20
+      delay: 15
+      delegate_to: "{{ groups['masters'][0] }}"
+
+# ============================================================
+# Étape 3 : Vérification finale
+# ============================================================
+
+- name: "Vérification finale de l'upgrade"
+  hosts: masters
+  become: true
+
+  tasks:
+    - name: "État des nœuds après upgrade"
+      shell: kubectl get nodes -o wide
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: nodes_final
+
+    - name: "Résultat"
+      debug:
+        var: nodes_final.stdout_lines

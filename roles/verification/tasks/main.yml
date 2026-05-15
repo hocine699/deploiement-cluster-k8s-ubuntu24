@@ -98,38 +98,6 @@
       === ÉVÉNEMENTS KUBERNETES (20 derniers) ===
       {{ k8s_events.stdout if k8s_events.rc == 0 else 'Erreur kubectl: ' + k8s_events.stderr }}
 
-- name: "Vérification du dashboard Kubernetes"
-  shell: kubectl get pods -n kubernetes-dashboard -o wide
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
-  register: dashboard_pods
-  delegate_to: "{{ groups['masters'][0] }}"
-  ignore_errors: true
-
-- name: "Résultat - État du dashboard"
-  debug:
-    msg: |
-      === DASHBOARD KUBERNETES ===
-      {{ dashboard_pods.stdout if dashboard_pods.rc == 0 else 'Dashboard non installé ou erreur: ' + dashboard_pods.stderr }}
-
-- name: "Récupération du token du dashboard"
-  shell: |
-    if kubectl get namespace kubernetes-dashboard 2>/dev/null; then
-      SECRET=$(kubectl get secrets -n kubernetes-dashboard | grep admin-user | awk '{print $1}' | head -1)
-      if [ ! -z "$SECRET" ]; then
-        kubectl describe secret $SECRET -n kubernetes-dashboard | grep token: | awk '{print $2}'
-      else
-        echo "Token not found - ServiceAccount may not be created yet"
-      fi
-    else
-      echo "Namespace kubernetes-dashboard not found"
-    fi
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
-  register: dashboard_token
-  delegate_to: "{{ groups['masters'][0] }}"
-  ignore_errors: true
-
 - name: "Sauvegarde des logs de diagnostic"
   shell: |
     echo "=== DIAGNOSTIC COMPLET DU CLUSTER ===" > cluster-diagnostic.txt
@@ -149,33 +117,13 @@
   delegate_to: "{{ groups['masters'][0] }}"
   ignore_errors: true
 
-- name: "Sauvegarde du token dashboard (si disponible)"
-  copy:
-    content: "{{ dashboard_token.stdout }}"
-    dest: "dashboard-token.txt"
-  when: 
-    - dashboard_token.rc == 0 
-    - dashboard_token.stdout is defined
-    - dashboard_token.stdout != "Token not found - ServiceAccount may not be created yet"
-    - dashboard_token.stdout != "Namespace kubernetes-dashboard not found"
-  delegate_to: "{{ groups['masters'][0] }}"
-  ignore_errors: true
-
 - name: "Récupération des informations de connexion"
   shell: |
-    echo "=== INFORMATIONS DU CLUSTER ===" > dashboard-info.txt
-    echo "Date de génération: $(date)" >> dashboard-info.txt
-    echo "Dashboard URL: https://{{ hostvars[groups['masters'][0]]['ansible_host'] }}:30443" >> dashboard-info.txt
-    echo "" >> dashboard-info.txt
-    if [ -f dashboard-token.txt ]; then
-      echo "Token admin:" >> dashboard-info.txt
-      cat dashboard-token.txt >> dashboard-info.txt
-    else
-      echo "Token admin: Non disponible (dashboard pas encore configuré)" >> dashboard-info.txt
-    fi
-    echo "" >> dashboard-info.txt
-    echo "=== RÉSUMÉ DES NŒUDS ===" >> dashboard-info.txt
-    kubectl get nodes -o wide >> dashboard-info.txt 2>&1 || echo "Cluster en cours de démarrage..." >> dashboard-info.txt
+    echo "=== INFORMATIONS DU CLUSTER ===" > cluster-info.txt
+    echo "Date de génération: $(date)" >> cluster-info.txt
+    echo "" >> cluster-info.txt
+    echo "=== RÉSUMÉ DES NŒUDS ===" >> cluster-info.txt
+    kubectl get nodes -o wide >> cluster-info.txt 2>&1 || echo "Cluster en cours de démarrage..." >> cluster-info.txt
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   delegate_to: "{{ groups['masters'][0] }}"

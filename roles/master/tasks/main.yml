@@ -124,77 +124,8 @@
       delay: 15
       when: not kubeconfig_stat.stat.exists
 
-    - name: "Déploiement du Kubernetes Dashboard"
-      shell: kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      when: not kubeconfig_stat.stat.exists
-
-    - name: "Configuration du service Dashboard en NodePort"
-      shell: kubectl patch svc kubernetes-dashboard -n kubernetes-dashboard -p '{"spec":{"type":"NodePort","ports":[{"port":443,"targetPort":8443,"nodePort":30443}]}}'
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      when: not kubeconfig_stat.stat.exists
-
     - name: "Suppression du taint sur master pour permettre scheduling pods"
       shell: kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
-      when: not kubeconfig_stat.stat.exists
-
-    - name: "Création de l'utilisateur admin pour le dashboard"
-      copy:
-        dest: /tmp/dashboard-admin.yaml
-        content: |
-          apiVersion: v1
-          kind: ServiceAccount
-          metadata:
-            name: admin-user
-            namespace: kubernetes-dashboard
-          ---
-          apiVersion: rbac.authorization.k8s.io/v1
-          kind: ClusterRoleBinding
-          metadata:
-            name: admin-user
-          roleRef:
-            apiGroup: rbac.authorization.k8s.io
-            kind: ClusterRole
-            name: cluster-admin
-          subjects:
-          - kind: ServiceAccount
-            name: admin-user
-            namespace: kubernetes-dashboard
-          ---
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: admin-user
-            namespace: kubernetes-dashboard
-            annotations:
-              kubernetes.io/service-account.name: "admin-user"   
-          type: kubernetes.io/service-account-token
-      when: not kubeconfig_stat.stat.exists
-
-    - name: "Application de la configuration admin dashboard"
-      shell: kubectl apply -f /tmp/dashboard-admin.yaml
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      when: not kubeconfig_stat.stat.exists
-
-    - name: "Vérification du déploiement du dashboard (non-bloquant)"
-      shell: kubectl get pods -n kubernetes-dashboard --no-headers | grep Running | wc -l
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: dashboard_pods
-      until: dashboard_pods.stdout|int >= 2
-      retries: 5
-      delay: 10
-      when: not kubeconfig_stat.stat.exists
-      failed_when: false
-
-    - name: "Info - État du dashboard"
-      debug:
-        msg: |
-          Pods Dashboard Running: {{ dashboard_pods.stdout if dashboard_pods is defined else 'Non vérifié' }}
-          Note: Le dashboard peut prendre plus de temps à démarrer, surtout si les workers ne sont pas encore joints.
       when: not kubeconfig_stat.stat.exists
