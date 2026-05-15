@@ -85,15 +85,23 @@
         state: absent
       loop: "{{ kube_apt_files }}"
 
-    - name: "Mise à jour du cache APT"
+    - name: "Mise à jour complète des paquets Ubuntu"
       apt:
         update_cache: yes
+        upgrade: full
+        autoremove: yes
+        autoclean: yes
 
     - name: "Redémarrage de containerd"
       systemd:
         name: containerd
         state: restarted
         enabled: yes
+
+    - name: "Reboot des nœuds"
+      reboot:
+        reboot_timeout: 300
+        msg: "Reboot post-cleanup et mise à jour Ubuntu"
 
     - name: "Vérification post-nettoyage"
       shell: systemctl is-active kubelet || echo "kubelet arrêté (normal)"
