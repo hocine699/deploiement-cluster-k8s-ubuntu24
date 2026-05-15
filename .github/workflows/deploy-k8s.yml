@@ -44,6 +44,11 @@ jobs:
           ssh-keyscan -H "$K8S_WORKER1_IP" >> ~/.ssh/known_hosts
           ssh-keyscan -H "$K8S_WORKER2_IP" >> ~/.ssh/known_hosts
 
+      - name: Copy group_vars to inventory directory
+        run: |
+          mkdir -p inventory/group_vars
+          cp -r group_vars/* inventory/group_vars/
+
       - name: Create inventory
         run: |
           cat > inventory/inventory.yml <<EOF
