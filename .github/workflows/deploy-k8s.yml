@@ -36,6 +36,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install dependencies (ansible, ssh client, kubectl)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ansible openssh-client
+          curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
