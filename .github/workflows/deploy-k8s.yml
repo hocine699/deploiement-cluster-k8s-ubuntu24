@@ -41,9 +41,6 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$K8S_MASTER_IP" >> ~/.ssh/known_hosts
-          ssh-keyscan -H "$K8S_WORKER1_IP" >> ~/.ssh/known_hosts
-          ssh-keyscan -H "$K8S_WORKER2_IP" >> ~/.ssh/known_hosts
 
       - name: Copy group_vars to inventory directory
         run: |
