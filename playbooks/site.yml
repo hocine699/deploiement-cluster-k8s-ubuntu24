@@ -16,13 +16,13 @@
     - kubernetes
 
 - name: "Initialisation du nœud master"
-  hosts: masters
+  hosts: control_plane
   become: true
   roles:
     - master
 
 - name: "Attente que le master soit complètement prêt"
-  hosts: masters
+  hosts: control_plane
   become: true
   tasks:
     - name: "Vérification que le master est Ready"

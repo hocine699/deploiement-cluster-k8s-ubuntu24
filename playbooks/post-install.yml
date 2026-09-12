@@ -1,6 +1,6 @@
 ---
 - name: "Post-installation - Vérification et correction du cluster"
-  hosts: masters
+  hosts: control_plane
   become: true
   tasks:
     - name: "Vérification de l'état des nœuds"

@@ -4,7 +4,7 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   register: nodes_raw
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Diagnostic initial - Pods système"
@@ -12,13 +12,13 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   register: system_pods_raw
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Diagnostic initial - Logs kubelet master"
   shell: journalctl -u kubelet --no-pager -l | tail -50
   register: kubelet_logs
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Affichage diagnostic initial"
@@ -41,7 +41,7 @@
   until: total_nodes.stdout|int >= groups['all']|length
   retries: 10
   delay: 15
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Vérification optionnelle - nœuds prêts"
@@ -49,7 +49,7 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   register: ready_nodes
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Affichage de l'état des nœuds"
@@ -57,7 +57,7 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   register: nodes_status
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Résultat - État des nœuds"
@@ -75,7 +75,7 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   register: system_pods
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Résultat - Pods système"
@@ -89,7 +89,7 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   register: k8s_events
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Résultat - Événements récents"
@@ -114,7 +114,7 @@
     echo "" >> cluster-diagnostic.txt
     echo "=== LOGS KUBELET (100 dernières lignes) ===" >> cluster-diagnostic.txt
     journalctl -u kubelet --no-pager -l | tail -100 >> cluster-diagnostic.txt 2>&1 || echo "Erreur journalctl" >> cluster-diagnostic.txt
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Récupération des informations de connexion"
@@ -126,7 +126,7 @@
     kubectl get nodes -o wide >> cluster-info.txt 2>&1 || echo "Cluster en cours de démarrage..." >> cluster-info.txt
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Vérification des plugins CNI sur tous les nœuds"
@@ -155,7 +155,7 @@
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
   register: final_pods_check
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
   ignore_errors: true
 
 - name: "Résultat final - Tous les pods"
@@ -163,4 +163,4 @@
     msg: |
       === ÉTAT FINAL DES PODS ===
       {{ final_pods_check.stdout if final_pods_check.rc == 0 else 'Erreur kubectl: ' + final_pods_check.stderr }}
-  delegate_to: "{{ groups['masters'][0] }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"

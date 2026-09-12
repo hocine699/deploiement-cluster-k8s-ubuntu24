@@ -10,7 +10,7 @@
 # ============================================================
 
 - name: "Upgrade du nœud master"
-  hosts: masters
+  hosts: control_plane
   become: true
   serial: 1
 
@@ -128,7 +128,7 @@
         --timeout=300s
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
-      delegate_to: "{{ groups['masters'][0] }}"
+      delegate_to: "{{ groups['control_plane'][0] }}"
 
     - name: "Mise à jour du repo vers {{ k8s_pkgs_version }}"
       shell: |
@@ -192,7 +192,7 @@
       shell: kubectl uncordon {{ ansible_hostname | lower }}
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
-      delegate_to: "{{ groups['masters'][0] }}"
+      delegate_to: "{{ groups['control_plane'][0] }}"
 
     - name: "Attente que {{ inventory_hostname }} soit Ready"
       shell: kubectl get node {{ ansible_hostname | lower }} --no-headers | awk '{print $2}'
@@ -202,14 +202,14 @@
       until: worker_status.stdout == "Ready"
       retries: 20
       delay: 15
-      delegate_to: "{{ groups['masters'][0] }}"
+      delegate_to: "{{ groups['control_plane'][0] }}"
 
 # ============================================================
 # Étape 3 : Vérification finale
 # ============================================================
 
 - name: "Vérification finale de l'upgrade"
-  hosts: masters
+  hosts: control_plane
   become: true
 
   tasks:

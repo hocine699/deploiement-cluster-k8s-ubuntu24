@@ -20,7 +20,7 @@ flannel_version: "v0.28.4"
 
 # Configuration du cluster
 cluster_name: "k8s-cluster"
-api_server_endpoint: "{{ hostvars[groups['masters'][0]]['ansible_host'] }}"
+api_server_endpoint: "{{ hostvars[groups['control_plane'][0]]['ansible_host'] }}"
 api_server_port: 6443
 
 # Certificats

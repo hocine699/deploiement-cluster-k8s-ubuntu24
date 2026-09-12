@@ -9,7 +9,7 @@
     - name: "Récupération de la commande de jointure depuis le master"
       shell: kubeadm token create --print-join-command
       register: join_command_result
-      delegate_to: "{{ groups['masters'][0] }}"
+      delegate_to: "{{ groups['control_plane'][0] }}"
       run_once: true
       when: not kubelet_conf_stat.stat.exists
 
