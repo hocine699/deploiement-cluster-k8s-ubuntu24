@@ -1,28 +1,26 @@
 all:
   children:
-    masters:
+    control_plane:
       hosts:
-        k8s-master-01:
+        k8s-cp-01:
           ansible_host: 192.168.1.70
-          ansible_user: nom d'utilisateur des VM
+          ansible_user: hocine
           ansible_ssh_private_key_file: ~/.ssh/id_ed25519
-          node_role: master
+          node_role: control-plane
     workers:
       hosts:
         k8s-worker-01:
-          ansible_host: 192.168.1.73
-          ansible_user: nom d'utilisateur des VM
+          ansible_host: 192.168.1.71
+          ansible_user: hocine
           ansible_ssh_private_key_file: ~/.ssh/id_ed25519
           node_role: worker
         k8s-worker-02:
-          ansible_host: 192.168.1.74
-          ansible_user: nom d'utilisateur des VM
+          ansible_host: 192.168.1.72
+          ansible_user: hocine
           ansible_ssh_private_key_file: ~/.ssh/id_ed25519
           node_role: worker
   vars:
     ansible_python_interpreter: /usr/bin/python3
-    # Disable SSH ControlMaster multiplexing to avoid "Shared connection to ... closed" errors
-    # and add a reasonable ConnectTimeout and ServerAliveInterval for stability
     ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o ControlMaster=no -o ConnectTimeout=10 -o ServerAliveInterval=60"
     ansible_become: true
     ansible_become_method: sudo
