@@ -1,0 +1,61 @@
+---
+# Installation de Cilium : réseau des pods + remplacement de kube-proxy
+# + contrôleur Gateway API.
+# Ordre imposé : les CRDs Gateway API AVANT Cilium. Sinon Cilium démarre
+# sans son contrôleur Gateway, et il faut le redémarrer.
+
+- name: "Installation de Helm {{ helm_version }}"
+  unarchive:
+    src: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+      - --wildcards
+      - "*/helm"
+    creates: /usr/local/bin/helm
+
+- name: "Installation des CRDs Gateway API {{ gateway_api_version }}"
+  command: >-
+    kubectl apply --server-side -f
+    https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/{{ gateway_api_version }}/config/crd/standard/gateway.networking.k8s.io_{{ item }}.yaml
+  loop:
+    - gatewayclasses
+    - gateways
+    - httproutes
+    - referencegrants
+    - grpcroutes
+    - backendtlspolicies
+    - tlsroutes
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: gateway_crds
+  changed_when: "'serverside-applied' in gateway_crds.stdout"
+
+- name: "Fichier de valeurs Cilium"
+  template:
+    src: cilium-values.yaml.j2
+    dest: /root/cilium-values.yaml
+    mode: "0600"
+
+- name: "Ajout du dépôt Helm Cilium"
+  command: helm repo add cilium https://helm.cilium.io/ --force-update
+  changed_when: false
+
+- name: "Installation de Cilium {{ cilium_version }}"
+  command: >-
+    helm upgrade --install cilium cilium/cilium
+    --version {{ cilium_version }}
+    --namespace kube-system
+    --values /root/cilium-values.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+# Pas de "helm --wait" : Hubble Relay et Hubble UI ne peuvent pas démarrer
+# tant que les workers n'ont pas rejoint le cluster. On attend seulement
+# l'agent Cilium sur le control plane.
+- name: "Attente de l'agent Cilium"
+  command: kubectl -n kube-system rollout status daemonset/cilium --timeout=300s
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false

@@ -1,0 +1,32 @@
+# Valeurs Helm de Cilium — générées par Ansible.
+
+# Cilium remplace kube-proxy. Il doit donc joindre l'API server par son
+# adresse réelle : le Service "kubernetes" ne fonctionne pas encore.
+kubeProxyReplacement: true
+k8sServiceHost: {{ api_server_endpoint }}
+k8sServicePort: {{ api_server_port }}
+
+# Les IP des pods viennent du réseau donné à kubeadm (pod_network_cidr).
+ipam:
+  mode: kubernetes
+
+# Un seul control plane : un seul opérateur suffit.
+operator:
+  replicas: 1
+
+# Gateway API : remplace ingress-nginx.
+gatewayAPI:
+  enabled: true
+
+# Annonce les IP de LoadBalancer sur le réseau de la maison (remplace MetalLB).
+l2announcements:
+  enabled: true
+externalIPs:
+  enabled: true
+
+# Hubble : voir le trafic réseau entre les pods.
+hubble:
+  relay:
+    enabled: true
+  ui:
+    enabled: true

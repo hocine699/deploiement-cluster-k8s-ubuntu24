@@ -35,21 +35,21 @@
       delay: 10
       failed_when: false
 
-    - name: "Vérification que Flannel est opérationnel"
-      shell: kubectl get pods -n kube-flannel --no-headers | grep "Running" | wc -l
+    - name: "Vérification que Cilium est opérationnel"
+      shell: kubectl -n kube-system get pods -l k8s-app=cilium --no-headers | grep -c Running
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
-      register: flannel_running
-      until: flannel_running.stdout|int >= 1
+      register: cilium_running
+      until: cilium_running.stdout|int >= 1
       retries: 5
       delay: 10
       failed_when: false
 
-    - name: "Affichage de l'état du master avant déploiement workers"
+    - name: "Affichage de l'état du control plane avant déploiement workers"
       debug:
         msg: |
-          Master Ready: {{ master_ready.rc == 0 }}
-          Flannel Pods Running: {{ flannel_running.stdout if flannel_running.stdout is defined else 'Unknown' }}
+          Control plane Ready: {{ master_ready.rc == 0 }}
+          Pods Cilium Running: {{ cilium_running.stdout | default('Unknown') }}
           Prêt pour déploiement workers
 
 - name: "Déploiement des workers"

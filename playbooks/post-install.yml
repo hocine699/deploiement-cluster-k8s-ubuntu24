@@ -1,75 +1,62 @@
 ---
-- name: "Post-installation - Vérification et correction du cluster"
+- name: "Post-installation - Vérification du cluster"
   hosts: control_plane
   become: true
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
   tasks:
-    - name: "Vérification de l'état des nœuds"
-      shell: kubectl get nodes --no-headers | grep -v Ready | wc -l
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: not_ready_nodes
+    - name: "Attente de l'agent Cilium sur tous les nœuds"
+      command: kubectl -n kube-system rollout status daemonset/cilium --timeout=300s
+      changed_when: false
 
-    - name: "Debug - Nœuds non prêts"
-      debug:
-        msg: "Nombre de nœuds non prêts: {{ not_ready_nodes.stdout }}"
+    - name: "Attente de l'opérateur Cilium et de Hubble"
+      command: kubectl -n kube-system rollout status deployment/{{ item }} --timeout=300s
+      loop:
+        - cilium-operator
+        - hubble-relay
+        - hubble-ui
+      changed_when: false
 
-    - name: "Vérification de l'installation de Flannel"
-      shell: kubectl get pods -n kube-flannel --no-headers 2>/dev/null | wc -l
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: flannel_pods_count
-      failed_when: false
-
-    - name: "Force installation de Flannel si absent"
-      shell: |
-        echo "Installation forcée de Flannel..."
-        kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
-        sleep 15
-        echo "Attente du déploiement de Flannel..."
-        kubectl rollout status daemonset/kube-flannel-ds -n kube-flannel --timeout=300s
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      when: flannel_pods_count.stdout|int == 0
-      retries: 2
-      delay: 10
-
-    - name: "Attente que les nœuds deviennent Ready"
-      shell: kubectl get nodes --no-headers | grep -v NotReady | wc -l
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
+    - name: "Attente que tous les nœuds soient Ready"
+      shell: kubectl get nodes --no-headers | awk '$2 == "Ready"' | wc -l
       register: ready_nodes_count
-      until: ready_nodes_count.stdout|int >= groups['all']|length
+      until: ready_nodes_count.stdout|int >= (groups['control_plane'] + groups['workers']) | length
       retries: 20
       delay: 15
-      failed_when: false
+      changed_when: false
+
+    - name: "Vérification que kube-proxy est bien absent"
+      command: kubectl -n kube-system get daemonset kube-proxy
+      register: kube_proxy_check
+      failed_when: kube_proxy_check.rc == 0
+      changed_when: false
+
+    - name: "Vérification que Cilium a créé la GatewayClass"
+      command: kubectl get gatewayclass cilium
+      register: gatewayclass_check
+      until: gatewayclass_check.rc == 0
+      retries: 10
+      delay: 10
+      changed_when: false
 
     - name: "État final des nœuds"
-      shell: kubectl get nodes -o wide
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
+      command: kubectl get nodes -o wide
       register: final_nodes_status
+      changed_when: false
 
     - name: "État final des pods système"
-      shell: kubectl get pods -n kube-system -o wide
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
+      command: kubectl get pods -n kube-system -o wide
       register: final_system_pods
-
-    - name: "État final des pods Flannel"
-      shell: kubectl get pods -n kube-flannel -o wide
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: final_flannel_pods
-      failed_when: false
+      changed_when: false
 
     - name: "Résultats finaux"
       debug:
         msg: |
           === NŒUDS ===
           {{ final_nodes_status.stdout }}
-          
+
           === PODS SYSTÈME ===
           {{ final_system_pods.stdout }}
-          
-          === PODS FLANNEL ===
-          {{ final_flannel_pods.stdout if final_flannel_pods.rc == 0 else 'Flannel non trouvé' }}
+
+          === GATEWAYCLASS ===
+          {{ gatewayclass_check.stdout }}

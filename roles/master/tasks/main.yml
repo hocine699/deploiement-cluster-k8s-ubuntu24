@@ -32,6 +32,7 @@
       shell: |
         kubeadm init \
           --pod-network-cidr={{ pod_network_cidr }} \
+          --skip-phases=addon/kube-proxy \
           --service-cidr={{ service_network_cidr }} \
           --apiserver-advertise-address={{ ansible_default_ipv4.address }} \
           --node-name={{ inventory_hostname }} \
@@ -78,23 +79,8 @@
         mode: '0644'
         remote_src: true
 
-    - name: "Vérification de l'installation de Flannel"
-      shell: kubectl get daemonset -n kube-flannel kube-flannel-ds
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: flannel_check
-      failed_when: false
-
-    - name: "Installation du plugin réseau Flannel"
-      shell: |
-        kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
-        sleep 10
-        kubectl rollout status daemonset/kube-flannel-ds -n kube-flannel --timeout=300s
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      when: flannel_check.rc != 0
-      retries: 3
-      delay: 10
+    - name: "Installation de Cilium (CNI, kube-proxy, Gateway API)"
+      include_tasks: cilium.yml
 
     - name: "Génération de la commande de jointure pour les workers"
       command: kubeadm token create --print-join-command
