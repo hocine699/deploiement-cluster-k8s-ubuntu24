@@ -103,8 +103,3 @@
       delay: 15
       when: not kubeconfig_stat.stat.exists
 
-    - name: "Suppression du taint sur master pour permettre scheduling pods"
-      shell: kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      when: not kubeconfig_stat.stat.exists
