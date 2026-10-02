@@ -19,6 +19,16 @@ all:
           ansible_user: hocine
           ansible_ssh_private_key_file: ~/.ssh/id_ed25519
           node_role: worker
+        k8s-worker-03:
+          ansible_host: 192.168.1.73
+          ansible_user: hocine
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+          node_role: worker
+        k8s-worker-04:
+          ansible_host: 192.168.1.74
+          ansible_user: hocine
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+          node_role: worker
   vars:
     ansible_python_interpreter: /usr/bin/python3
     ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o ControlMaster=no -o ConnectTimeout=10 -o ServerAliveInterval=60"

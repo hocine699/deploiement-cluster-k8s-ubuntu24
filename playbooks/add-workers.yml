@@ -1,0 +1,17 @@
+---
+# Ajoute des workers sans toucher au control plane.
+# Usage : ansible-playbook -i inventory/inventory.yml playbooks/add-workers.yml --limit k8s-worker-03,k8s-worker-04
+- name: "Ajout de workers"
+  hosts: workers
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: "Mise à jour du cache APT"
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+  roles:
+    - common
+    - containerd
+    - kubernetes
+    - worker
