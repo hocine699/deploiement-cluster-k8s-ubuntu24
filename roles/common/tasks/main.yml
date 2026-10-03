@@ -82,3 +82,21 @@
     - name: "Mise à jour du cache APT après ajout du repo"
       apt:
         update_cache: yes
+- name: "DNS : ignorer les DNS annoncés en IPv6 par la box (AdGuard seul)"
+  copy:
+    dest: /etc/netplan/60-no-ipv6-dns.yaml
+    mode: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          eth0:
+            ra-overrides:
+              use-dns: false
+  register: netplan_no_ipv6_dns
+  tags: [dns]
+
+- name: "DNS : application de la configuration réseau"
+  command: netplan apply
+  when: netplan_no_ipv6_dns.changed
+  tags: [dns]
